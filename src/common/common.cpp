@@ -1,6 +1,8 @@
 #include "common.h"
+#include <algorithm>
 #include <iostream>
 
+namespace mirror {
 int RatioAnchors(const cv::Rect & anchor,
 	const std::vector<float>& ratios, 
 	std::vector<cv::Rect>* anchors) {
@@ -86,37 +88,7 @@ int ComputeIOU(const cv::Rect & rect1,
 	return 0;
 }
 
-
-int NMS(const std::vector<FaceInfo>& faces,
-	std::vector<FaceInfo>* result, const float& threshold,
-	const std::string& type) {
-	result->clear();
-	if (faces.size() == 0)
-		return -1;
-
-	std::vector<size_t> idx(faces.size());
-
-	for (unsigned i = 0; i < idx.size(); i++) {
-		idx[i] = i;
-	}
-
-	while (idx.size() > 0) {
-		int good_idx = idx[0];
-		result->push_back(faces[good_idx]);
-		std::vector<size_t> tmp = idx;
-		idx.clear();
-		for (unsigned i = 1; i < tmp.size(); i++) {
-			int tmp_i = tmp[i];
-			float iou = 0.0f;
-			ComputeIOU(faces[good_idx].face_, faces[tmp_i].face_, &iou, type);
-			if (iou <= threshold)
-				idx.push_back(tmp_i);
-		}
-	}
-}
-
-
-float CalculSimilarity(const std::vector<float>&feature1, const std::vector<float>& feature2) {
+float CalculateSimilarity(const std::vector<float>&feature1, const std::vector<float>& feature2) {
 	if (feature1.size() != feature2.size()) {
 		std::cout << "feature size not match." << std::endl;
 		return 10003;
@@ -133,4 +105,6 @@ float CalculSimilarity(const std::vector<float>&feature1, const std::vector<floa
 		feature_norm2 += feature2[i] * feature2[i];
 	}
 	return inner_product / sqrt(feature_norm1) / sqrt(feature_norm2);
+}
+
 }
