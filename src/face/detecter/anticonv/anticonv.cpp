@@ -1,4 +1,4 @@
-#include "retinaface.h"
+#include "anticonv.h"
 #include <iostream>
 
 #if MIRROR_VULKAN
@@ -6,30 +6,30 @@
 #endif // MIRROR_VULKAN
 
 namespace mirror {
-RetinaFace::RetinaFace() :
-	retina_net_(new ncnn::Net()),
+AntiConv::AntiConv() :
+	anticonv_net_(new ncnn::Net()),
 	initialized_(false) {
 #if MIRROR_VULKAN
 	ncnn::create_gpu_instance();	
-    retina_net_->opt.use_vulkan_compute = true;
+    anticonv_net_->opt.use_vulkan_compute = true;
 #endif // MIRROR_VULKAN
 
 }
 
-RetinaFace::~RetinaFace() {
-	if (retina_net_) {
-		retina_net_->clear();
+AntiConv::~AntiConv() {
+	if (anticonv_net_) {
+		anticonv_net_->clear();
 	}
 #if MIRROR_VULKAN
 	ncnn::destroy_gpu_instance();
 #endif // MIRROR_VULKAN	
 }
 
-int RetinaFace::LoadModel(const char * root_path) {
-	std::string fd_param = std::string(root_path) + "/fd.param";
-	std::string fd_bin = std::string(root_path) + "/fd.bin";
-	if (retina_net_->load_param(fd_param.c_str()) == -1 ||
-		retina_net_->load_model(fd_bin.c_str()) == -1) {
+int AntiConv::LoadModel(const char * root_path) {
+	std::string fd_param = std::string(root_path) + "/mask.param";
+	std::string fd_bin = std::string(root_path) + "/mask.bin";
+	if (anticonv_net_->load_param(fd_param.c_str()) == -1 ||
+		anticonv_net_->load_model(fd_bin.c_str()) == -1) {
 		std::cout << "load face detect model failed." << std::endl;
 		return 10000;
 	}
@@ -53,7 +53,7 @@ int RetinaFace::LoadModel(const char * root_path) {
 	return 0;
 }
 
-int RetinaFace::DetectFace(const cv::Mat & img_src,
+int AntiConv::DetectFace(const cv::Mat & img_src,
 	std::vector<FaceInfo>* faces) {
 	std::cout << "start face detect." << std::endl;
 	faces->clear();
@@ -70,21 +70,23 @@ int RetinaFace::DetectFace(const cv::Mat & img_src,
 	int img_height = img_cpy.rows;
 	float factor_x = static_cast<float>(img_width) / inputSize_.width;
 	float factor_y = static_cast<float>(img_height) / inputSize_.height;
-	ncnn::Extractor ex = retina_net_->create_extractor();
+	ncnn::Extractor ex = anticonv_net_->create_extractor();
 	ncnn::Mat in = ncnn::Mat::from_pixels_resize(img_cpy.data,
 		ncnn::Mat::PIXEL_BGR2RGB, img_width, img_height, inputSize_.width, inputSize_.height);
 	ex.input("data", in);
-	
+
 	std::vector<FaceInfo> faces_tmp;
 	for (int i = 0; i < 3; ++i) {
-		std::string class_layer_name = "face_rpn_cls_prob_reshape_stride" + std::to_string(RPNs_[i]);
+        std::string class_layer_name = "face_rpn_cls_prob_reshape_stride" + std::to_string(RPNs_[i]);
 		std::string bbox_layer_name = "face_rpn_bbox_pred_stride" + std::to_string(RPNs_[i]);
 		std::string landmark_layer_name = "face_rpn_landmark_pred_stride" + std::to_string(RPNs_[i]);
+		std::string type_layer_name = "face_rpn_type_prob_reshape_stride" + std::to_string(RPNs_[i]);
 
-		ncnn::Mat class_mat, bbox_mat, landmark_mat;
+		ncnn::Mat class_mat, bbox_mat, landmark_mat, type_mat;
 		ex.extract(class_layer_name.c_str(), class_mat);
 		ex.extract(bbox_layer_name.c_str(), bbox_mat);
 		ex.extract(landmark_layer_name.c_str(), landmark_mat);
+		ex.extract(type_layer_name.c_str(), type_mat);
 
 		ANCHORS anchors = anchors_generated_.at(i);
 		int width = class_mat.w;
@@ -98,6 +100,7 @@ int RetinaFace::DetectFace(const cv::Mat & img_src,
 					if (score < scoreThreshold_) {
 						continue;
 					}
+					float prob = type_mat.channel(2 * anchor_num + a)[index];
 					cv::Rect box = cv::Rect(w * RPNs_[i] + anchors[a].x,
 						h * RPNs_[i] + anchors[a].y,
 						anchors[a].width,
@@ -123,6 +126,7 @@ int RetinaFace::DetectFace(const cv::Mat & img_src,
 					FaceInfo face_info;
 					memset(&face_info, 0, sizeof(face_info));
 					face_info.score_ = score;
+					face_info.mask_ = (prob > maskThreshold_);
 					face_info.location_ = curr_box;
 					faces_tmp.push_back(face_info);
 				}

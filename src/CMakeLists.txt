@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.1)
-
 set(SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/common/common.cpp
 
@@ -11,6 +9,7 @@ set(SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/centerface/centerface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/mtcnn/mtcnn.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/retinaface/retinaface.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/anticonv/anticonv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/face/landmarker/landmarker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/face/landmarker/zqlandmarker/zqlandmarker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/face/recognizer/recognizer.cpp
@@ -35,15 +34,20 @@ file(GLOB LIBS ${CMAKE_CURRENT_SOURCE_DIR}/../lib/*.a)
 target_link_libraries(VisionEngine PUBLIC ${LIBS} ${OpenCV_LIBS})
 
 if(MIRROR_OPENMP)
-find_package(OpenMP)
-if(NOT TARGET OpenMP::OpenMP_CXX AND (OpenMP_CXX_FOUND OR OPENMP_FOUND))
-    target_compile_options(VisionEngine PRIVATE ${OpenMP_CXX_FLAGS})
-endif()
+    find_package(OpenMP)
+    if(NOT TARGET OpenMP::OpenMP_CXX AND (OpenMP_CXX_FOUND OR OPENMP_FOUND))
+        target_compile_options(VisionEngine PRIVATE ${OpenMP_CXX_FLAGS})
+    endif()
 endif()
 
 if(MIRROR_OPENMP AND OpenMP_CXX_FOUND)
     message("Building with OpenMP")
     target_link_libraries(VisionEngine PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+if(MIRROR_VULKAN)
+    find_package(Vulkan REQUIRED)
+    target_link_libraries(VisionEngine PUBLIC Vulkan::Vulkan)
 endif()
 
 target_include_directories(VisionEngine
@@ -58,6 +62,8 @@ target_include_directories(VisionEngine
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/database>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/detecter>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/centerface>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/mtcnn>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/detecter/anticonv>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/landmarker>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/landmarker/zqlandmarker>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/face/recognizer>
